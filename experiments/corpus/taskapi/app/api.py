@@ -31,6 +31,12 @@ def handle_user_summary(user_id: int) -> dict[str, Any]:
     }
 
 
+def handle_user_badge(user_id: int) -> dict[str, Any]:
+    """Short display badge for a user."""
+    user = get_user(user_id)
+    return {"status": 200, "data": {"badge": user["name"].upper()}}
+
+
 def handle_complete_task(task_id: int, actor_id: int) -> dict[str, Any]:
     if not complete_task(task_id, actor_id):
         return {"status": 403, "error": "not permitted or task missing"}
