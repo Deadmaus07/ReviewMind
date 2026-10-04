@@ -182,13 +182,64 @@ misrepresent the architecture.
 
 ---
 
-## Remaining blocker: a GitHub repository
+## Live end-to-end demonstration — VERIFIED on a real pull request
 
-These require a live repo and cannot be demonstrated without one:
+Repository: `github.com/Deadmaus07/ReviewMind` (private) · **PR #1**
 
-- GitHub Actions executing on a real PR event
-- ReviewMind posting inline PR comments
-- `pr-agent` reviewing a real PR
-- issue → PR automation end-to-end
+A branch was pushed adding a new handler containing a genuine **cross-file**
+defect. The diff is a *pure addition* — nothing in it hints that `get_user` can
+return `None`; that contract lives in `app/db.py`, outside the diff.
 
-Everything else above is verified locally.
+```python
+def handle_user_badge(user_id: int) -> dict[str, Any]:
+    """Short display badge for a user."""
+    user = get_user(user_id)
+    return {"status": 200, "data": {"badge": user["name"].upper()}}
+```
+
+### ReviewMind's output (posted to the PR)
+
+Inline comment on `experiments/corpus/taskapi/app/api.py:34`:
+
+> 🟠 **HIGH** · `crash` — handle_user_badge assumes get_user always returns a user
+> dict; if get_user returns None (e.g., unknown user), accessing `user["name"]`
+> raises a TypeError/KeyError.
+
+Plus a summary comment and a test suggestion
+(`test_handle_user_badge_missing_user`, using `monkeypatch` to force the `None`
+path). Measured: **2.66 s** total, 0.97 s retrieval, 1,613 + 545 tokens,
+retriever `bm25+bidirectional-callgraph`, model `openai/gpt-oss-120b`.
+
+### CodiumAI PR-Agent's output (same PR, same Groq key)
+
+Posted a *PR Reviewer Guide* identifying the **same** defect, and applied the
+label `Review effort 2/5`.
+
+### Second cross-tool convergence
+
+Two independent systems — our retrieval-augmented reviewer and CodiumAI's
+PR-Agent — flagged the same defect by different means. They were also
+**complementary**: PR-Agent reported *"No relevant tests"* while ReviewMind
+supplied a concrete test for the failing path.
+
+This is a weak form of external validation. It is not a controlled comparison
+(n=1, and the defect is one we planted), so it should be presented as
+corroboration, not as a measured result.
+
+## Remaining blocker: one token permission
+
+The two workflow files in `.github/workflows/` are **present on disk and
+validated** but could not be pushed:
+
+```
+! [remote rejected] main -> main (refusing to allow a Personal Access Token to
+  create or update workflow `.github/workflows/reviewmind-fix.yml` without
+  `workflow` scope)
+```
+
+GitHub requires an explicit **Workflows: Read and write** permission on a
+fine-grained token before it may create files under `.github/workflows/`. Adding
+that permission to the token (or committing the two files through the GitHub web
+UI) is the only outstanding step. Everything the workflows invoke
+(`reviewmind.github.action`, `reviewmind.automation.cli`) is pushed and was
+exercised directly against PR #1.
