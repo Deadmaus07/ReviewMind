@@ -47,3 +47,5 @@ def handle_complete_task(task_id: int, actor_id: int) -> dict[str, Any]:
     if not complete_task(task_id, actor_id):
         return {"status": 403, "error": "not permitted or task missing"}
     return {"status": 200, "data": {"task_id": task_id, "done": True}}
+
+# trigger CI after workflow fix
