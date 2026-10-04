@@ -67,11 +67,13 @@ jobs:
           echo "Diff is $(wc -l < /tmp/pr.diff) lines"
 
       - name: Detect whether secrets are available
-        id: secrets
+        id: keycheck
         # Fork PRs get no secrets. Detect that explicitly rather than failing
         # with a confusing auth error deep in the run.
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -n "${{ secrets.GROQ_API_KEY }}" ]; then
+          if [ -n "$GROQ_API_KEY" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -79,7 +81,7 @@ jobs:
           fi
 
       - name: Run ReviewMind
-        if: steps.secrets.outputs.available == 'true' && steps.diff.outputs.lines != '0'
+        if: steps.keycheck.outputs.available == 'true' && steps.diff.outputs.lines != '0'
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-120b' }}
