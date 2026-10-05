@@ -146,15 +146,54 @@ class GroqLLM:
     BASE_DELAY_S = 4.0
 
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL,
-                 tokens_per_minute: int = 8000) -> None:
+                 tokens_per_minute: int = 8000,
+                 fallback_keys: Optional[list[str]] = None) -> None:
         from groq import Groq  # imported lazily so mock mode needs no SDK
 
         from reviewmind.review.throttle import TokenBucket
 
-        self._client = Groq(api_key=api_key)
+        # Groq enforces a per-DAY token cap per account (200k observed on the
+        # free tier). Exhausting it mid-demonstration is unrecoverable within
+        # the session, so additional keys can be supplied as spares: when one
+        # reports a daily/rate-limit exhaustion, we rotate to the next and
+        # retry rather than failing.
+        #
+        # Keys are tried in order and rotation is sticky -- once we move on we
+        # do not return, since the exhausted key stays exhausted until reset.
+        self._keys = [api_key] + [k for k in (fallback_keys or []) if k]
+        self._key_index = 0
+        self._Groq = Groq
+        self._client = Groq(api_key=self._keys[0])
         self.model = model
         # Pace calls to stay inside the measured TPM budget. See throttle.py.
         self._bucket = TokenBucket(tokens_per_minute=tokens_per_minute)
+
+    @property
+    def n_keys(self) -> int:
+        return len(self._keys)
+
+    def _rotate_key(self) -> bool:
+        """Switch to the next spare key. False when none remain."""
+        import sys as _sys
+        if self._key_index + 1 >= len(self._keys):
+            return False
+        self._key_index += 1
+        self._client = self._Groq(api_key=self._keys[self._key_index])
+        print(f"      quota exhausted; rotating to spare key "
+              f"{self._key_index + 1}/{len(self._keys)}", file=_sys.stderr)
+        return True
+
+    @staticmethod
+    def _is_quota_exhausted(exc: Exception) -> bool:
+        """True for a daily/account quota failure, as opposed to a brief burst.
+
+        A per-MINUTE limit clears on its own, so backing off is correct there.
+        A per-DAY limit does not, so retrying the same key is futile -- that is
+        the case where rotating to a spare key is the only way forward.
+        """
+        msg = str(exc).lower()
+        return ("tokens per day" in msg or "tpd" in msg
+                or "quota" in msg or "account is locked" in msg)
 
     @staticmethod
     def _is_transient(exc: Exception) -> bool:
@@ -207,6 +246,11 @@ class GroqLLM:
                 # `extract_json`, which tolerates fences, prose and trailing text.
                 # Losing a correct finding to a formatting technicality would
                 # also silently depress this arm's measured recall.
+                # A daily-quota failure will not clear by waiting, so rotate
+                # to a spare key and retry immediately rather than backing off.
+                if self._is_quota_exhausted(exc) and self._rotate_key():
+                    continue
+
                 if json_mode and "json_validate_failed" in str(exc):
                     try:
                         resp = self._call(system, user, temperature, max_tokens,
@@ -272,6 +316,11 @@ def build_llm(mode: Optional[str] = None, model: Optional[str] = None):
     model = model or os.getenv("GROQ_MODEL", DEFAULT_MODEL)
     key = os.getenv("GROQ_API_KEY", "").strip()
     tpm = int(os.getenv("GROQ_TOKENS_PER_MINUTE", "8000"))
+    # Spare keys, used only when the primary reports a daily-quota exhaustion.
+    # Either GROQ_API_KEY_2 / _3, or a comma-separated GROQ_API_KEYS.
+    spares = [os.getenv(f"GROQ_API_KEY_{i}", "").strip() for i in (2, 3, 4)]
+    spares += [k.strip() for k in os.getenv("GROQ_API_KEYS", "").split(",")]
+    spares = [k for k in spares if k and k != key]
 
     if mode == "live":
         if not key:
@@ -279,6 +328,7 @@ def build_llm(mode: Optional[str] = None, model: Optional[str] = None):
                   "Falling back to MOCK. Results will be marked "
                   "valid_for_reporting=false.", file=sys.stderr)
             return MockLLM()
-        return GroqLLM(api_key=key, model=model, tokens_per_minute=tpm)
+        return GroqLLM(api_key=key, model=model, tokens_per_minute=tpm,
+                       fallback_keys=spares)
 
     return MockLLM()
