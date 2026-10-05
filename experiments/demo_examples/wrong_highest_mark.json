@@ -1,0 +1,7 @@
+{
+  "id": "wrong_highest_mark",
+  "title": "Returns the wrong 'best mark'",
+  "plain": "A new function finds a student's best mark, but it skips the very first mark in the list. If their best mark happened to be first, it reports the wrong number. No crash - just a silently wrong answer, which is worse.",
+  "file": "marks.py",
+  "diff": "--- a/marks.py\n+++ b/marks.py\n@@ -26,6 +26,16 @@\n     return max(student[\"marks\"])\n \n \n+def best_mark(student_id):\n+    \"\"\"Return the student's best mark.\"\"\"\n+    student = find_student(student_id)\n+    best = 0\n+    for mark in student[\"marks\"][1:]:\n+        if mark > best:\n+            best = mark\n+    return best\n+\n+\n def has_passed(student_id):\n     \"\"\"A student passes if their average is 40 or more.\"\"\"\n     return average_marks(student_id) >= 40\n"
+}

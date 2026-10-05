@@ -197,6 +197,26 @@ class GroqLLM:
                 self._bucket.record(est, resp.prompt_tokens + resp.completion_tokens)
                 return resp
             except Exception as exc:  # noqa: BLE001
+                # Groq's strict JSON mode rejects the WHOLE response if the model
+                # emits even slightly malformed JSON (e.g. a duplicated key).
+                # Observed in practice: the model had found the defect correctly,
+                # but one repeated "suggestion" key discarded the entire answer.
+                #
+                # Retrying at temperature 0 would reproduce the same output, so
+                # we instead retry ONCE in free-form mode and parse with
+                # `extract_json`, which tolerates fences, prose and trailing text.
+                # Losing a correct finding to a formatting technicality would
+                # also silently depress this arm's measured recall.
+                if json_mode and "json_validate_failed" in str(exc):
+                    try:
+                        resp = self._call(system, user, temperature, max_tokens,
+                                          started, json_mode=False)
+                        self._bucket.record(est, resp.prompt_tokens + resp.completion_tokens)
+                        return resp
+                    except Exception:  # noqa: BLE001
+                        pass
+                raise
+            except Exception as exc:  # noqa: BLE001
                 last_error = f"{type(exc).__name__}: {exc}"
                 if not self._is_transient(exc) or attempt == self.MAX_ATTEMPTS:
                     break
