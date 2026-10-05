@@ -46,13 +46,13 @@ from reviewmind.review.llm import build_llm  # noqa: E402
 app = FastAPI(title="ReviewMind", version="0.2.0-a2")
 templates = Jinja2Templates(directory=str(ROOT / "api" / "templates"))
 
-# The LIVE DEMO runs against a deliberately simple corpus (student marks) so the
-# code can be read aloud and understood by an audience. The EXPERIMENT ran
+# The LIVE DEMO runs against the Checkout API corpus: a small, readable service
+# whose defects require CROSS-FILE context, which is the capability being shown. The EXPERIMENT ran
 # against `taskapi`, which is more realistic; its results are what the dashboard
 # reports. The two are kept separate on purpose and the distinction is stated in
 # docs/TOOL_COVERAGE.md -- presenting demo code as experiment code would
 # misrepresent the evaluation.
-CORPUS = ROOT / "experiments" / "corpus" / "school"
+CORPUS = ROOT / "experiments" / "corpus" / "shop"
 EXPERIMENT_CORPUS = ROOT / "experiments" / "corpus" / "taskapi"
 DATASET = ROOT / "experiments" / "dataset" / "cases"
 DEMO_EXAMPLES = ROOT / "experiments" / "demo_examples"

@@ -1,7 +1,0 @@
-{
-  "id": "divide_by_zero",
-  "title": "Crashes if a student has no marks yet",
-  "plain": "A new function works out the class average. If a student has an empty marks list, dividing by zero crashes the program. A new student would have no marks.",
-  "file": "marks.py",
-  "diff": "--- a/marks.py\n+++ b/marks.py\n@@ -18,6 +18,11 @@\n     return total / count\n \n \n+def average_of_list(marks):\n+    \"\"\"Return the average of a list of marks.\"\"\"\n+    return sum(marks) / len(marks)\n+\n+\n def highest_mark(student_id):\n     \"\"\"Return the student's best single mark, or 0 if they do not exist.\"\"\"\n     student = find_student(student_id)\n"
-}

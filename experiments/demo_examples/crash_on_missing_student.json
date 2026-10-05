@@ -1,7 +1,0 @@
-{
-  "id": "crash_on_missing_student",
-  "title": "Crashes when the student does not exist",
-  "plain": "A new function prints a short badge for a student. It looks fine - but find_student() returns None when there is no such student, and you cannot read a name out of None. That rule is written in database.py, a DIFFERENT file.",
-  "file": "report.py",
-  "diff": "--- a/report.py\n+++ b/report.py\n@@ -12,6 +12,12 @@\n     return student[\"name\"]\n \n \n+def student_badge(student_id):\n+    \"\"\"Return a short badge like AARAV for a student.\"\"\"\n+    student = find_student(student_id)\n+    return student[\"name\"].upper()\n+\n+\n def report_card(student_id):\n     \"\"\"Build a one-line report card for a student.\"\"\"\n     student = find_student(student_id)\n"
-}
