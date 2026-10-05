@@ -15,7 +15,7 @@ Open these **four browser tabs**, in this order:
 
 1. `http://127.0.0.1:8000/demo` — live review
 2. `http://127.0.0.1:8000/` — dashboard
-3. `https://github.com/Deadmaus07/ReviewMind/pull/2` — **unreviewed** PR (the live moment)
+3. `https://github.com/Deadmaus07/ReviewMind/pull/3` — **unreviewed**, simple code (the live moment)
 4. `https://github.com/Deadmaus07/ReviewMind/pull/1` — already reviewed, as backup
 
 Have a **second terminal tab** open at `~/ReviewMind_IDT`, ready to type.
@@ -31,10 +31,10 @@ Confirm you have internet. Then **stop touching it.**
 > ReviewMind reviews every pull request automatically. The difference from a
 > normal linter is that it reads the *rest of the codebase* first."
 
-Click **`add_double_scale_001`**. Let them read the code change.
+Click **“Shows 8000% instead of 80%”**. Let them read it — four lines, no jargon.
 
-> "This looks fine. You get a number, you format it as a percentage. Nothing
-> on this screen is wrong."
+> "This takes a student's average and shows it as a percentage, so it multiplies
+> by 100. Completely reasonable. Nothing on this screen is wrong."
 
 Tick **"Compare both"**. Click **Review**.
 
@@ -42,16 +42,16 @@ Tick **"Compare both"**. Click **Review**.
 
 Then point at the two halves:
 
-> "Top half is the AI shown only the change — it reports two problems and both
-> are wrong guesses. Bottom half is the same AI, same model, same prompt, with
-> one difference: it was allowed to fetch related code first. It found the real
-> bug — this function already returns a percentage, so multiplying by 100 turns
-> 50% into 5000%."
+> "Top half is the AI shown only the change. It guesses — says the value might
+> be missing. Wrong. Bottom half is the same AI, same model, same prompt, with
+> one difference: it could read the other files first. It found the real bug —
+> `average_marks` ALREADY returns a percentage, so multiplying by 100 turns 80%
+> into 8000%."
 
 Point at the bottom panel:
 
-> "And here's *why* it knew. It fetched `completion_ratio` from another file.
-> The green tag says `callee` — that's the function the change calls."
+> "And here's *why* it knew. It fetched `average_marks` from `marks.py`. The
+> green tag says `callee` — that's the function this change calls."
 
 **That single screen is the whole project.** Don't rush it.
 
@@ -98,14 +98,17 @@ Then, briefly — **do not read them out**:
 
 Show **PR #2**. Scroll the code change.
 
-> "Someone added a helper that fetches a task's title. Looks reasonable. But
-> looking up a task can return nothing, and that's defined in a different file,
-> so this will crash."
+> "Someone added a function that makes a short badge from a student's name.
+> Four lines. Looks completely fine."
+>
+> "But look at `find_student` — it's in a different file, and it returns
+> *nothing* when the student doesn't exist. You can't read a name out of
+> nothing. So this crashes."
 
 Point out there are **no comments yet.** Then in the terminal:
 
 ```bash
-./scripts/review_pr.sh 2
+./scripts/review_pr.sh 3
 ```
 
 While it runs (about 5 seconds), say:
@@ -164,6 +167,7 @@ hedging.*
 |---|---|
 | Page won't load | Restart: `.venv/bin/uvicorn api.main:app --port 8000` |
 | Review hangs / rate-limited | Switch to tab 4 — PR #1 already has real comments |
+| Want a second run | Use PR #1 or #2, never #3 — keep #3 clean |
 | No internet | Dashboard works offline. Use tabs 2 and 4. |
 | Everything fails | Talk through tab 2 and `docs/LIMITATIONS.md`. The research is the marks. |
 
