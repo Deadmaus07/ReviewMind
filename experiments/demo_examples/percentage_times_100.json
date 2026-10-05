@@ -1,0 +1,7 @@
+{
+  "id": "percentage_times_100",
+  "title": "Shows 8000% instead of 80%",
+  "plain": "A new function shows the average as a percentage, so it multiplies by 100. But average_marks() ALREADY returns a percentage - that is written in marks.py, a DIFFERENT file. So 80% becomes 8000%.",
+  "file": "report.py",
+  "diff": "--- a/report.py\n+++ b/report.py\n@@ -12,6 +12,12 @@\n     return student[\"name\"]\n \n \n+def percent_line(student_id):\n+    \"\"\"Show the student's average as a percentage.\"\"\"\n+    average = average_marks(student_id)\n+    return str(average * 100) + \"%\"\n+\n+\n def report_card(student_id):\n     \"\"\"Build a one-line report card for a student.\"\"\"\n     student = find_student(student_id)\n"
+}

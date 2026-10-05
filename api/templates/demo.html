@@ -112,12 +112,10 @@ const ex = $('examples');
 CASES.forEach((c,i) => {
   const b = document.createElement('button');
   b.className = 'ghost';
-  b.textContent = c.case_id;
+  b.textContent = c.title || c.case_id;
   b.onclick = () => {
     $('diff').value = c.diff;
-    $('exdesc').textContent = c.description +
-      (c.cross_file ? '  —  requires cross-file context' : '  —  self-contained') +
-      '  ·  ' + c.injection_mode + '-mode';
+    $('exdesc').textContent = c.description;
   };
   ex.appendChild(b);
 });

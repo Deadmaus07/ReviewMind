@@ -46,8 +46,16 @@ from reviewmind.review.llm import build_llm  # noqa: E402
 app = FastAPI(title="ReviewMind", version="0.2.0-a2")
 templates = Jinja2Templates(directory=str(ROOT / "api" / "templates"))
 
-CORPUS = ROOT / "experiments" / "corpus" / "taskapi"
+# The LIVE DEMO runs against a deliberately simple corpus (student marks) so the
+# code can be read aloud and understood by an audience. The EXPERIMENT ran
+# against `taskapi`, which is more realistic; its results are what the dashboard
+# reports. The two are kept separate on purpose and the distinction is stated in
+# docs/TOOL_COVERAGE.md -- presenting demo code as experiment code would
+# misrepresent the evaluation.
+CORPUS = ROOT / "experiments" / "corpus" / "school"
+EXPERIMENT_CORPUS = ROOT / "experiments" / "corpus" / "taskapi"
 DATASET = ROOT / "experiments" / "dataset" / "cases"
+DEMO_EXAMPLES = ROOT / "experiments" / "demo_examples"
 
 # Built once at startup: indexing on every request would make the live demo feel
 # slow for reasons unrelated to the thing being demonstrated.
@@ -93,21 +101,27 @@ def load_json(rel: str) -> dict[str, Any]:
 
 
 def demo_cases() -> list[dict[str, Any]]:
-    """Seeded cases offered as one-click examples on the live demo page."""
+    """One-click examples for the live demo page.
+
+    These are written against the simple `school` corpus and phrased in plain
+    language, because a demonstration fails if the presenter cannot read the
+    code aloud. Each one is a pure addition whose defect is only visible from
+    another file -- which is exactly the capability being demonstrated.
+    """
     out = []
-    for cid in ("add_null_deref_001", "add_double_scale_001", "off_by_one_001",
-                "add_ignored_return_001", "hardcoded_secret_001"):
-        f = DATASET / cid / "case.json"
-        if f.exists():
+    for f in sorted(DEMO_EXAMPLES.glob("*.json")):
+        try:
             d = json.loads(f.read_text())
-            out.append({
-                "case_id": d["case_id"],
-                "defect_class": d["defect_class"],
-                "description": d["description"],
-                "cross_file": d["requires_cross_file_context"],
-                "injection_mode": d.get("injection_mode", "deletion"),
-                "diff": d["diff"],
-            })
+        except (OSError, json.JSONDecodeError):
+            continue
+        out.append({
+            "case_id": d["id"],
+            "title": d.get("title", ""),
+            "description": d.get("plain", ""),
+            "cross_file": True,
+            "injection_mode": "addition",
+            "diff": d["diff"],
+        })
     return out
 
 
