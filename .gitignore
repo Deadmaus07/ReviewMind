@@ -40,6 +40,11 @@ data/index/
 # the underlying per-case data is not independently checkable.
 *.log
 
+# ---- Course material ----
+# Faculty handouts are not ours to redistribute publicly. They remain on disk
+# for reference but are excluded from the repository.
+*.pdf
+
 # ---- Editor / OS ----
 .vscode/
 .idea/
