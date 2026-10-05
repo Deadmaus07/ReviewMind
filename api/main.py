@@ -253,6 +253,193 @@ def api_ask(req: AskRequest):
     return bot.ask(req.question).to_dict()
 
 
+# --------------------------------------------------------------------------- #
+# Demo control panel
+#
+# Drives the whole demonstration from the browser so nothing has to be typed.
+# Every action is scoped to the demo corpus (experiments/corpus/shop) and
+# refuses to touch anything outside it -- see _demo_file().
+# --------------------------------------------------------------------------- #
+
+SHOP = ROOT / "experiments" / "corpus" / "shop"
+
+# The one line that distinguishes the broken and working checkout page.
+BROKEN_LINE = "    payable = amount * percent"
+FIXED_LINE = "    payable = apply_discount(amount, tier)"
+
+
+def _demo_file() -> Path:
+    """The only file the control panel may modify."""
+    f = (SHOP / "service.py").resolve()
+    if not str(f).startswith(str(SHOP.resolve())):
+        raise RuntimeError("refusing to touch a file outside the demo corpus")
+    return f
+
+
+def _shop_state() -> str:
+    try:
+        text = _demo_file().read_text()
+    except OSError:
+        return "unknown"
+    if BROKEN_LINE in text:
+        return "broken"
+    if FIXED_LINE in text:
+        return "working"
+    return "unknown"
+
+
+def _read_token() -> str:
+    """GitHub token, from the environment or the file the demo scripts use."""
+    import os as _os
+    tok = _os.getenv("GITHUB_TOKEN", "").strip()
+    if tok:
+        return tok
+    try:
+        return (Path.home() / ".rm_token").read_text().strip()
+    except OSError:
+        return ""
+
+
+@app.get("/control", response_class=HTMLResponse)
+def control(request: Request):
+    import os as _os
+    return templates.TemplateResponse("control.html", {
+        "request": request,
+        "state": _shop_state(),
+        "repo": _os.getenv("GITHUB_REPO", "Deadmaus07/ReviewMind"),
+    })
+
+
+@app.get("/api/demo/status")
+def demo_status():
+    """Current state of the demo service, and what the SHOP PAGE charges.
+
+    Reads the customer-facing page rather than /checkout, because /checkout is
+    not the endpoint the demonstration breaks -- reporting its (correct) total
+    while the shop overcharges would be actively misleading on the panel.
+    """
+    import re
+
+    import requests as _rq
+
+    total = None
+    try:
+        html = _rq.get("http://127.0.0.1:9000/shop?customer=101&amount=1000",
+                       timeout=4).text
+        m = re.search(r'class="amt">&#8377;([\d,]+\.\d{2})', html)
+        if m:
+            total = float(m.group(1).replace(",", ""))
+    except Exception:  # noqa: BLE001 -- the shop may simply not be running
+        pass
+    return {"state": _shop_state(), "shop_up": total is not None,
+            "checkout_total": total}
+
+
+@app.post("/api/demo/break")
+def demo_break():
+    """Reintroduce the defect so the demonstration can be repeated."""
+    f = _demo_file()
+    text = f.read_text()
+    if BROKEN_LINE in text:
+        return {"ok": True, "state": "broken", "note": "already broken"}
+    if FIXED_LINE not in text:
+        return JSONResponse({"ok": False, "error": "unexpected file contents"},
+                            status_code=409)
+    f.write_text(text.replace(FIXED_LINE, BROKEN_LINE))
+    return {"ok": True, "state": "broken"}
+
+
+@app.post("/api/demo/fix")
+def demo_fix():
+    """Ask the model to write a fix, then apply it.
+
+    This genuinely calls the LLM rather than restoring a stored copy: the point
+    of the demonstration is that the fix is generated, not replayed.
+    """
+    from reviewmind.automation.issue_to_pr import propose_patch
+
+    issue = ("the checkout page overcharges: payable is calculated as amount "
+             "times percent, but discount_percent returns a percentage like 20 "
+             "meaning 20 percent off, not a multiplier")
+    try:
+        prop = propose_patch(0, "checkout page overcharges", issue,
+                             SHOP, build_llm(), scoped_root=True)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"},
+                            status_code=500)
+
+    applied = []
+    rejected = [{"path": c.path, "reason": c.rejected_reason}
+                for c in prop.changes if not c.accepted]
+    for c in prop.accepted_changes:
+        target = (SHOP / c.path).resolve()
+        if not str(target).startswith(str(SHOP.resolve())):
+            rejected.append({"path": c.path, "reason": "outside the demo corpus"})
+            continue
+        target.write_text(c.new_content)
+        applied.append(c.path)
+
+    return {"ok": bool(applied), "state": _shop_state(),
+            "reasoning": prop.reasoning, "applied": applied,
+            "rejected": rejected, "errors": prop.errors,
+            "tests": [t.get("name") for t in prop.test_suggestions][:3],
+            "latency_s": round(prop.latency_s, 2)}
+
+
+class ReviewPRRequest(BaseModel):
+    pr: int
+    post: bool = True
+
+
+@app.post("/api/demo/review")
+def demo_review_pr(req: ReviewPRRequest):
+    """Review a live pull request and optionally post the comments."""
+    import os as _os
+
+    import requests as _rq
+
+    from reviewmind.github.client import post_review
+
+    token = _read_token()
+    repo = _os.getenv("GITHUB_REPO", "Deadmaus07/ReviewMind")
+    if not token:
+        return JSONResponse({"ok": False, "error": "no GitHub token available"},
+                            status_code=400)
+    try:
+        r = _rq.get(f"https://api.github.com/repos/{repo}/pulls/{req.pr}",
+                    headers={"Authorization": f"Bearer {token}",
+                             "Accept": "application/vnd.github.v3.diff"}, timeout=30)
+        r.raise_for_status()
+        diff = r.text
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"could not fetch PR: {exc}"},
+                            status_code=502)
+
+    changed = None
+    for line in diff.splitlines():
+        if line.startswith("+++ b/"):
+            changed = line[6:].strip().split("/")[-1]
+            break
+
+    result = llm_arm.review(f"pr-{req.pr}", diff, build_llm(),
+                            retriever=GraphRetriever(chunk_repo(SHOP)),
+                            repo_dir=SHOP, changed_file=changed, top_k=6)
+
+    posted = None
+    if req.post and not result.errors:
+        p = post_review(repo, req.pr, token, result.issues,
+                        result.test_suggestions, result.model,
+                        result.retriever, dry_run=False)
+        posted = {"inline": p.posted_inline, "summary": p.posted_summary,
+                  "skipped": p.skipped, "errors": p.errors}
+
+    payload = result.to_dict()
+    payload["posted"] = posted
+    payload["pr_url"] = f"https://github.com/{repo}/pull/{req.pr}"
+    payload["ok"] = not result.errors
+    return payload
+
+
 @app.get("/api/health")
 def health():
     import os
