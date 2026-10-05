@@ -131,11 +131,24 @@ class PatchProposal:
 # Path safety
 # --------------------------------------------------------------------------- #
 
-def path_is_allowed(path: str) -> tuple[bool, str]:
+def path_is_allowed(path: str, scoped_root: bool = False) -> tuple[bool, str]:
     """Gate a model-proposed path. Returns (allowed, reason_if_not).
 
     Default-deny: a path must match an allow-list prefix. A default-allow policy
     with a deny-list would be one creative model output away from editing CI.
+
+    `scoped_root=True` means the caller has ALREADY restricted the working tree
+    to a specific subdirectory (e.g. --repo-root experiments/corpus/school). In
+    that case paths arrive relative to that subdirectory and cannot match the
+    repository-level prefixes, so the prefix check is skipped as redundant.
+
+    The checks that actually provide the security guarantee are UNAFFECTED by
+    this flag and always run:
+      * no absolute paths, no `..` traversal -- so a scoped root cannot be escaped
+      * no CI config, workflows, requirements, Dockerfile, .env or secrets
+      * .py files only
+    Only the "which source directory" question is relaxed, and only when the
+    caller has already answered it by scoping the root.
     """
     norm = path.replace("\\", "/").lstrip("./")
 
@@ -147,7 +160,7 @@ def path_is_allowed(path: str) -> tuple[bool, str]:
         if bad.lower() in low:
             return False, f"matches forbidden pattern '{bad}'"
 
-    if not any(norm.startswith(p) for p in ALLOWED_PATH_PREFIXES):
+    if not scoped_root and not any(norm.startswith(p) for p in ALLOWED_PATH_PREFIXES):
         return False, (f"outside allow-list {ALLOWED_PATH_PREFIXES}")
 
     if not norm.endswith(".py"):
@@ -175,6 +188,7 @@ def propose_patch(
     repo_root: Path,
     llm: Any,
     top_k: int = 6,
+    scoped_root: bool = False,
 ) -> PatchProposal:
     """Ask the model for a minimal fix, then gate every proposed change."""
     from reviewmind.parsing.chunker import chunk_repo
@@ -238,7 +252,7 @@ def propose_patch(
         content = str(item.get("new_content", ""))
         change = ProposedChange(path=path, new_content=content)
 
-        ok, reason = path_is_allowed(path)
+        ok, reason = path_is_allowed(path, scoped_root=scoped_root)
         if not ok:
             change.rejected_reason = reason
         elif not content.strip():
