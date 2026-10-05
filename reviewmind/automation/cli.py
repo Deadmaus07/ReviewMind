@@ -28,6 +28,10 @@ def main() -> int:
     ap.add_argument("--issue-number", type=int, required=True)
     ap.add_argument("--issue-title", default="")
     ap.add_argument("--repo-root", default=".")
+    ap.add_argument("--scoped-root", action="store_true",
+                    help="the repo-root is already a restricted subdirectory, so "
+                         "paths are relative to it (traversal, forbidden-path and "
+                         ".py-only checks still apply)")
     ap.add_argument("--top-k", type=int, default=6)
     ap.add_argument("--apply", action="store_true",
                     help="actually create the branch and open the PR "
@@ -53,6 +57,7 @@ def main() -> int:
         repo_root=repo_root,
         llm=build_llm(),
         top_k=args.top_k,
+        scoped_root=args.scoped_root,
     )
 
     print(json.dumps(proposal.to_dict(), indent=2))
