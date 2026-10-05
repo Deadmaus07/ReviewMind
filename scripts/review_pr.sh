@@ -8,7 +8,11 @@
 # refresh the PR in the browser.
 set -euo pipefail
 
-PR="${1:?usage: ./scripts/review_pr.sh <pr-number>}"
+PR="${1:?usage: ./scripts/review_pr.sh <pr-number> [repo-root]}"
+# Optional second argument: which directory to index for retrieval.
+# Indexing a whole large repository can exceed the model's per-minute token
+# budget, so point this at the project under review when it is a subdirectory.
+REPO_ROOT_ARG="${2:-.}"
 REPO="${REVIEWMIND_REPO:-Deadmaus07/ReviewMind}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -19,7 +23,7 @@ fi
 TOKEN="$(cat "$HOME/.rm_token")"
 
 echo "──────────────────────────────────────────────"
-echo " ReviewMind  →  $REPO  PR #$PR"
+echo " ReviewMind  →  $REPO  PR #$PR   (indexing: $REPO_ROOT_ARG)"
 echo "──────────────────────────────────────────────"
 
 echo "[1/3] fetching the diff from GitHub..."
@@ -32,7 +36,7 @@ echo "[2/3] reviewing (retrieval + LLM)..."
 echo "[3/3] posting to GitHub..."
 GITHUB_TOKEN="$TOKEN" .venv/bin/python -m reviewmind.github.action \
   --diff /tmp/reviewmind_pr.diff \
-  --repo "$REPO" --pr "$PR" --repo-root . \
+  --repo "$REPO" --pr "$PR" --repo-root "$REPO_ROOT_ARG" \
   --output /tmp/reviewmind_review.json 2>/dev/null | \
   .venv/bin/python -c "
 import json,sys
