@@ -20,6 +20,15 @@ def handle_update_email(user_id: int, email: str) -> dict[str, Any]:
     return {"status": 200, "data": {"email": email}}
 
 
+def handle_profile_email(user_id: int, email: str) -> dict[str, Any]:
+    """Update a user's email from the profile page."""
+    try:
+        update_email(user_id, email)
+    except Exception:
+        return {"status": 500, "error": "update failed"}
+    return {"status": 200, "data": {"email": email}}
+
+
 def handle_user_summary(user_id: int) -> dict[str, Any]:
     return {
         "status": 200,
