@@ -19,6 +19,37 @@ from reviewmind.schema import Issue, ReviewResult, TestSuggestion
 
 VALID_SEVERITY = {"critical", "high", "medium", "low", "info"}
 
+# Hard ceiling on retrieved context, in characters (~4 chars per token).
+# WHY: retrieval returns the top-k most relevant chunks, but says nothing about
+# their SIZE. Reviewing a PR against a large repository pulled 36,328 tokens of
+# context and was rejected with HTTP 413 against an 8,000 tokens/minute limit.
+# Relevance ranking alone is not a budget, so we impose one: oversized chunks
+# are truncated, and once the budget is spent the remaining chunks are dropped.
+# Chunks are consumed in rank order, so the most relevant context survives.
+MAX_CONTEXT_CHARS = 10_000
+MAX_CHUNK_CHARS = 2_500
+
+
+def fit_context(chunks: list[Chunk]) -> tuple[list[Chunk], int]:
+    """Trim retrieved chunks to the context budget. Returns (chunks, n_dropped)."""
+    import dataclasses
+
+    kept: list[Chunk] = []
+    spent = 0
+    dropped = 0
+
+    for c in chunks:
+        text = c.text
+        if len(text) > MAX_CHUNK_CHARS:
+            text = text[:MAX_CHUNK_CHARS] + "\n    # ... (truncated)"
+        if spent + len(text) > MAX_CONTEXT_CHARS:
+            dropped += 1
+            continue
+        kept.append(c if text == c.text else dataclasses.replace(c, text=text))
+        spent += len(text)
+
+    return kept, dropped
+
 
 def _coerce_line(raw: Any) -> Optional[int]:
     """LLMs emit line numbers as ints, strings, or '42-45'. Normalise to int."""
@@ -120,7 +151,11 @@ def review(
 
         try:
             hits = retriever.search(diff, **kwargs)
-            chunks = [h.chunk for h in hits]
+            chunks, dropped = fit_context([h.chunk for h in hits])
+            if dropped:
+                result.errors.append(
+                    f"context budget: dropped {dropped} chunk(s) over "
+                    f"{MAX_CONTEXT_CHARS} chars")
         except (TypeError, ValueError, OSError) as exc:
             result.errors.append(f"retrieval failed: {exc}")
         retrieval_s = time.perf_counter() - r0
