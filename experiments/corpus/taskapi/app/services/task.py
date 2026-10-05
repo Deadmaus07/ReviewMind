@@ -51,3 +51,5 @@ def top_priority(user_id: int) -> Optional[dict[str, Any]]:
         if t["priority"] < best["priority"]:
             best = t
     return best
+
+# ci trigger
