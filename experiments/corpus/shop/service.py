@@ -45,6 +45,15 @@ def get_customer(customer_id: int):
     return {"status": 200, "data": customer}
 
 
+@app.get("/invoice/{customer_id}")
+def invoice(customer_id: int, amount: float = 1000.0):
+    """Generate an invoice showing the discounted price."""
+    customer = find_customer(customer_id)
+    discount = discount_percent(customer["tier"])
+    final_price = amount * discount
+    return {"status": 200, "customer": customer["name"], "pay": final_price}
+
+
 @app.get("/checkout/{customer_id}")
 def checkout(customer_id: int, amount: float = 1000.0):
     """Work out what this customer pays for an order."""
