@@ -128,11 +128,17 @@ Then switch to **tab 4 (PR #1)**:
 ## IF ASKED
 
 **"Is this automatic?"**
-> "The workflow files are committed and the pipeline is proven — you just watched
-> it. GitHub's hosted runner is currently failing at startup and I haven't fixed
-> that yet, so I trigger it manually. The automation itself works."
+> "The workflow is committed and the pipeline is proven — you just watched it
+> review a real pull request. GitHub Actions is locked on my account for a
+> billing reason, so the hosted runner never starts the job. I verified that by
+> making the repository public, where Actions is free and unlimited — it still
+> failed with the same annotation, which shows the lock is on the account, not
+> the repo. So I trigger it with one command instead. The automation works;
+> GitHub won't run it for me."
 
-*Do not claim it fires automatically. It doesn't yet.*
+*Do not claim it fires automatically. It does not. The error annotation is
+visible in the Actions tab if they want to see it — showing them is better than
+hedging.*
 
 **"Did you write all this?"**
 > "I used AI assistance to build it. What I can do is explain and defend every

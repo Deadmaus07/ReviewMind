@@ -226,20 +226,54 @@ This is a weak form of external validation. It is not a controlled comparison
 (n=1, and the defect is one we planted), so it should be presented as
 corroboration, not as a measured result.
 
-## Remaining blocker: one token permission
+## Remaining blocker: GitHub Actions is locked on the account
 
-The two workflow files in `.github/workflows/` are **present on disk and
-validated** but could not be pushed:
+The two workflow files are **committed, validated and visible in the repository**
+(`.github/workflows/reviewmind.yml`, `reviewmind-fix.yml`). They have never
+executed, for a reason outside the project:
 
 ```
-! [remote rejected] main -> main (refusing to allow a Personal Access Token to
-  create or update workflow `.github/workflows/reviewmind-fix.yml` without
-  `workflow` scope)
+Annotations
+  review
+  The job was not started because your account is locked due to a billing issue.
 ```
 
-GitHub requires an explicit **Workflows: Read and write** permission on a
-fine-grained token before it may create files under `.github/workflows/`. Adding
-that permission to the token (or committing the two files through the GitHub web
-UI) is the only outstanding step. Everything the workflows invoke
-(`reviewmind.github.action`, `reviewmind.automation.cli`) is pushed and was
-exercised directly against PR #1.
+Every run fails in 3–5 seconds, before any step executes. Five runs, identical
+annotation each time.
+
+**What we ruled out, in order:**
+
+1. *An invalid workflow file.* Both files parse, and GitHub lists them under
+   Actions with the correct triggers and job names.
+2. *A missing token permission.* A push of `.github/workflows/` was initially
+   rejected for lacking `workflow` scope; that was fixed and the files pushed
+   successfully. The runs still failed identically, so this was not the cause.
+3. *A reserved-word collision.* A step had `id: secrets`, which shadows the
+   reserved `secrets` context. Renamed to `keycheck` — no change in behaviour.
+   (The rename is retained as correct practice regardless.)
+4. *Private-repository Actions minutes.* The repository was made **public**,
+   where Actions is free and unlimited. **The runs still failed identically**,
+   which establishes that the lock is at the **account** level, not the
+   repository level.
+
+The automation itself is **not** unproven. Everything the workflow invokes was
+executed directly against live pull requests:
+
+```
+$ ./scripts/review_pr.sh 1
+  2 issue(s) found in 4.369s
+    [HIGH]   app/api.py:34  completion ratio multiplied by 100 twice
+    [MEDIUM] app/api.py:31  get_user may return None
+    [TEST]   test_handle_completion_badge_scaling
+    [TEST]   test_handle_user_badge_missing_user
+  model=openai/gpt-oss-120b  retrieval=bm25+bidirectional-callgraph
+```
+
+So the pipeline — fetch diff → retrieve context → review → post inline comments —
+works end to end on real pull requests. What does not work is GitHub's hosted
+runner starting the job, which is a billing state on the account and not
+something the project can fix in code.
+
+**Honest statement of status:** the CI/CD integration is *implemented and
+demonstrable*, but *not currently automatic*. It is invoked by a one-line
+command rather than by a PR hook.
