@@ -31,7 +31,21 @@ def handle_user_summary(user_id: int) -> dict[str, Any]:
     }
 
 
+def handle_user_badge(user_id: int) -> dict[str, Any]:
+    """Short display badge for a user."""
+    user = get_user(user_id)
+    return {"status": 200, "data": {"badge": user["name"].upper()}}
+
+
+def handle_completion_badge(user_id: int) -> dict[str, Any]:
+    """Completion percentage, formatted for display."""
+    ratio = completion_ratio(user_id)
+    return {"status": 200, "data": {"percent": f"{ratio * 100:.0f}%"}}
+
+
 def handle_complete_task(task_id: int, actor_id: int) -> dict[str, Any]:
     if not complete_task(task_id, actor_id):
         return {"status": 403, "error": "not permitted or task missing"}
     return {"status": 200, "data": {"task_id": task_id, "done": True}}
+
+# trigger CI after workflow fix
