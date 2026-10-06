@@ -26,6 +26,12 @@ def complete_task(task_id: int, actor_id: int) -> bool:
     return True
 
 
+def task_title(task_id: int) -> str:
+    """Return the title of a task."""
+    task = get_task(task_id)
+    return task["title"]
+
+
 def completion_ratio(user_id: int) -> float:
     """Percentage of the user's tasks that are done."""
     tasks = list_user_tasks(user_id)
