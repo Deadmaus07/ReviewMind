@@ -349,6 +349,8 @@ def control(request: Request):
         "request": request,
         "state": _shop_state(),
         "repo": _os.getenv("GITHUB_REPO", "Deadmaus07/ReviewMind"),
+        # Configurable so a fresh demo PR does not require a code change.
+        "demo_pr": int(_os.getenv("DEMO_PR", "8")),
     })
 
 

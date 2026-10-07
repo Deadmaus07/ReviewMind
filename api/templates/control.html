@@ -89,7 +89,7 @@
     <span class="n">4</span>
     <div><h3>Open the pull request</h3>
       <p>See the comments ReviewMind left on the code.</p></div>
-    <a class="btn" id="prLink" href="https://github.com/{{ repo }}/pull/7" target="_blank">Open PR ↗</a>
+    <a class="btn" id="prLink" href="https://github.com/{{ repo }}/pull/{{ demo_pr }}" target="_blank">Open PR ↗</a>
   </div>
 
   <div class="step">
@@ -106,7 +106,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const PR = 7;
+const PR = {{ demo_pr }};
 $('prn').textContent = PR;
 
 function log(html, cls){
