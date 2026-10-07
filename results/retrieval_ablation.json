@@ -1,5 +1,5 @@
 {
-  "n_chunks": 25,
+  "n_chunks": 31,
   "n_cases": 4,
   "critical_chunks": {
     "null_deref_001": "fetch_user",
