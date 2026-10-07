@@ -45,6 +45,13 @@ def get_average(student_id: int):
     return {"status": 200, "average_percent": average_marks(student_id)}
 
 
+@app.get("/badge/{student_id}")
+def get_badge(student_id: int):
+    """Return a short uppercase badge for a student."""
+    student = find_student(student_id)
+    return {"status": 200, "badge": student["name"].upper()}
+
+
 @app.get("/report/{student_id}")
 def get_report(student_id: int):
     """Return a one-line report card."""
