@@ -300,6 +300,9 @@ def _shop_charge() -> float | None:
         return None
 
 
+REFERENCE_FILE = SHOP / "_reference_service.py"
+
+
 def _demo_file() -> Path:
     """The only file the control panel may modify."""
     f = (SHOP / "service.py").resolve()
@@ -374,26 +377,29 @@ def demo_status():
 def demo_break():
     """Reintroduce the defect so the demonstration can be repeated.
 
-    Rewrites whichever payable assignment is currently present, rather than only
-    the canonical one -- a generated fix may have written any correct variant.
+    Restores the file from a pristine reference FIRST, then applies the one-line
+    defect. Editing in place does not survive repeated fix/break cycles: the fix
+    is generated, so each one may restructure the handler differently. One run
+    inlined discount_percent() and removed the `percent` variable; the next
+    Break then wrote `payable = amount * percent`, referencing a name that no
+    longer existed, and the page returned HTTP 500 instead of the overcharge.
+
+    Resetting from a known-good copy makes the demonstration repeatable no
+    matter what shape the previous fix left behind.
     """
-    import re
-
     f = _demo_file()
-    text = f.read_text()
-    if BROKEN_LINE in text:
-        return {"ok": True, "state": "broken", "note": "already broken"}
-
-    # Replace the payable assignment inside the shop handler, whatever form the
-    # last fix left it in, and drop any explanatory comment above it.
-    new, n = re.subn(r"(?m)^[ \t]*#[^\n]*\n(?=[ \t]*payable\s*=)", "", text)
-    new, n2 = re.subn(r"(?m)^[ \t]*payable\s*=.*$", BROKEN_LINE, new, count=1)
-    if not n2:
+    if not REFERENCE_FILE.exists():
         return JSONResponse(
-            {"ok": False, "error": "could not find a payable assignment to break"},
-            status_code=409)
-    f.write_text(new)
-    return {"ok": True, "state": "broken", "comments_removed": n}
+            {"ok": False, "error": "reference copy missing"}, status_code=500)
+
+    pristine = REFERENCE_FILE.read_text()
+    if FIXED_LINE not in pristine:
+        return JSONResponse(
+            {"ok": False, "error": "reference copy does not contain the expected line"},
+            status_code=500)
+
+    f.write_text(pristine.replace(FIXED_LINE, BROKEN_LINE, 1))
+    return {"ok": True, "state": "broken", "reset_from_reference": True}
 
 
 @app.post("/api/demo/fix")
