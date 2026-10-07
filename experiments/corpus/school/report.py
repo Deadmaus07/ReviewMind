@@ -12,6 +12,12 @@ def student_name(student_id):
     return student["name"]
 
 
+def student_badge(student_id):
+    """Return a short badge like AARAV for a student."""
+    student = find_student(student_id)
+    return student["name"].upper()
+
+
 def report_card(student_id):
     """Build a one-line report card for a student."""
     student = find_student(student_id)
