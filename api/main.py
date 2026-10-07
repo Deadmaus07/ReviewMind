@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import glob
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -274,6 +275,11 @@ SHOP = ROOT / "experiments" / "corpus" / "shop"
 BROKEN_LINE = "    payable = amount * percent"
 FIXED_LINE = "    payable = apply_discount(amount, tier)"
 
+# Where the demo shop is reachable. Localhost when run from a virtualenv;
+# a service name when run under Docker Compose, where 127.0.0.1 would resolve
+# to the API container itself rather than the shop.
+SHOP_URL = os.getenv("SHOP_URL", "http://127.0.0.1:9000")
+
 # A Rs.1000 order for a gold (20% off) customer.
 DEMO_AMOUNT = 1000.0
 EXPECTED_TOTAL = 800.0
@@ -286,7 +292,7 @@ def _shop_charge() -> float | None:
 
     import requests as _rq
     try:
-        html = _rq.get(f"http://127.0.0.1:9000/shop?customer=101&amount={DEMO_AMOUNT:.0f}",
+        html = _rq.get(f"{SHOP_URL}/shop?customer=101&amount={DEMO_AMOUNT:.0f}",
                        timeout=4).text
         m = re.search(r'class="amt">&#8377;([\d,]+\.\d{2})', html)
         return float(m.group(1).replace(",", "")) if m else None
@@ -354,19 +360,10 @@ def demo_status():
     not the endpoint the demonstration breaks -- reporting its (correct) total
     while the shop overcharges would be actively misleading on the panel.
     """
-    import re
-
-    import requests as _rq
-
-    total = None
-    try:
-        html = _rq.get("http://127.0.0.1:9000/shop?customer=101&amount=1000",
-                       timeout=4).text
-        m = re.search(r'class="amt">&#8377;([\d,]+\.\d{2})', html)
-        if m:
-            total = float(m.group(1).replace(",", ""))
-    except Exception:  # noqa: BLE001 -- the shop may simply not be running
-        pass
+    # One implementation, in _shop_charge(). A second copy here was hardcoded to
+    # 127.0.0.1 and silently reported the shop as down under Docker Compose,
+    # where the shop is a separate container.
+    total = _shop_charge()
     return {"state": _shop_state(), "shop_up": total is not None,
             "checkout_total": total}
 
