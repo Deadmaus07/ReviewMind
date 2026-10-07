@@ -75,11 +75,29 @@ def retriever() -> GraphRetriever:
 # --------------------------------------------------------------------------- #
 
 def latest_summary() -> dict[str, Any]:
-    """Most recent run that is valid for reporting.
+    """The run the dashboard reports.
 
-    Deliberately skips runs flagged valid_for_reporting=false (mock backend), so
-    the dashboard cannot display pipeline-test output as though it were a result.
+    RESULTS_RUN pins a specific run. Without it, the most recent valid run is
+    used. Pinning matters because the dashboard and the written report must cite
+    the SAME run: hosted inference is not bitwise deterministic even at
+    temperature 0, so two runs under identical conditions differed by one case
+    on the diff-only arm (11/14 vs 12/14). Showing one number on a slide and
+    another on screen would look like an inconsistency rather than variance.
+
+    Runs flagged valid_for_reporting=false (mock backend) are always skipped, so
+    pipeline-test output can never be displayed as a result.
     """
+    pinned = os.getenv("RESULTS_RUN", "").strip()
+    if pinned:
+        f = ROOT / "results" / pinned / "summary.json"
+        if f.exists():
+            try:
+                data = json.loads(f.read_text())
+                if data.get("config", {}).get("valid_for_reporting"):
+                    return data
+            except (OSError, json.JSONDecodeError):
+                pass
+
     for path in sorted(glob.glob(str(ROOT / "results" / "run_*" / "summary.json")), reverse=True):
         try:
             data = json.loads(Path(path).read_text())
