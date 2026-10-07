@@ -263,9 +263,35 @@ def api_ask(req: AskRequest):
 
 SHOP = ROOT / "experiments" / "corpus" / "shop"
 
-# The one line that distinguishes the broken and working checkout page.
+# The defect, and the canonical repair.
+#
+# Detection must NOT rely on matching the repaired line, because the fix is
+# GENERATED: the model may write any correct implementation. It has produced
+# both `apply_discount(amount, tier)` and `amount * (1 - percent / 100)` --
+# equally correct, but only one matches a hardcoded string. State is therefore
+# decided by BEHAVIOUR (what the shop actually charges), with the defect pattern
+# as a fast path. Anything else is reported honestly as unknown.
 BROKEN_LINE = "    payable = amount * percent"
 FIXED_LINE = "    payable = apply_discount(amount, tier)"
+
+# A Rs.1000 order for a gold (20% off) customer.
+DEMO_AMOUNT = 1000.0
+EXPECTED_TOTAL = 800.0
+BROKEN_TOTAL = 20000.0
+
+
+def _shop_charge() -> float | None:
+    """What the live shop page charges for the reference order."""
+    import re
+
+    import requests as _rq
+    try:
+        html = _rq.get(f"http://127.0.0.1:9000/shop?customer=101&amount={DEMO_AMOUNT:.0f}",
+                       timeout=4).text
+        m = re.search(r'class="amt">&#8377;([\d,]+\.\d{2})', html)
+        return float(m.group(1).replace(",", "")) if m else None
+    except Exception:  # noqa: BLE001 -- the shop may simply not be running
+        return None
 
 
 def _demo_file() -> Path:
@@ -277,14 +303,24 @@ def _demo_file() -> Path:
 
 
 def _shop_state() -> str:
+    """Broken or working, judged by what the shop charges."""
     try:
         text = _demo_file().read_text()
     except OSError:
         return "unknown"
+
+    # Fast path: the known defect is present verbatim.
     if BROKEN_LINE in text:
         return "broken"
-    if FIXED_LINE in text:
+
+    # Otherwise decide on behaviour, which is robust to any correct fix.
+    charge = _shop_charge()
+    if charge is None:
+        return "working" if FIXED_LINE in text else "unknown"
+    if abs(charge - EXPECTED_TOTAL) < 0.01:
         return "working"
+    if charge > EXPECTED_TOTAL:
+        return "broken"
     return "unknown"
 
 
@@ -337,16 +373,28 @@ def demo_status():
 
 @app.post("/api/demo/break")
 def demo_break():
-    """Reintroduce the defect so the demonstration can be repeated."""
+    """Reintroduce the defect so the demonstration can be repeated.
+
+    Rewrites whichever payable assignment is currently present, rather than only
+    the canonical one -- a generated fix may have written any correct variant.
+    """
+    import re
+
     f = _demo_file()
     text = f.read_text()
     if BROKEN_LINE in text:
         return {"ok": True, "state": "broken", "note": "already broken"}
-    if FIXED_LINE not in text:
-        return JSONResponse({"ok": False, "error": "unexpected file contents"},
-                            status_code=409)
-    f.write_text(text.replace(FIXED_LINE, BROKEN_LINE))
-    return {"ok": True, "state": "broken"}
+
+    # Replace the payable assignment inside the shop handler, whatever form the
+    # last fix left it in, and drop any explanatory comment above it.
+    new, n = re.subn(r"(?m)^[ \t]*#[^\n]*\n(?=[ \t]*payable\s*=)", "", text)
+    new, n2 = re.subn(r"(?m)^[ \t]*payable\s*=.*$", BROKEN_LINE, new, count=1)
+    if not n2:
+        return JSONResponse(
+            {"ok": False, "error": "could not find a payable assignment to break"},
+            status_code=409)
+    f.write_text(new)
+    return {"ok": True, "state": "broken", "comments_removed": n}
 
 
 @app.post("/api/demo/fix")
