@@ -104,6 +104,29 @@
   <div id="log">Ready.</div>
 </div>
 
+<h3 style="font-size:13px;margin:26px 0 10px;color:var(--muted);
+           text-transform:uppercase;letter-spacing:.06em;font-weight:600">
+  Ask the codebase
+</h3>
+<div class="card">
+  <p class="sub" style="margin:0 0 12px">
+    The same retrieval, answering questions instead of reviewing. Answers are
+    grounded in the code it fetched, and cite where they came from.
+  </p>
+  <div style="margin-bottom:10px">
+    <button class="ghost qp">What does discount_percent return — a percentage or a fraction?</button>
+    <button class="ghost qp">What happens if a customer does not exist?</button>
+    <button class="ghost qp">How is GST applied to an order?</button>
+  </div>
+  <div style="display:flex;gap:10px">
+    <input id="q" placeholder="Ask anything about the codebase…"
+      style="flex:1;background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+             border-radius:8px;padding:10px 12px;font-size:14px">
+    <button id="bAsk">Ask</button>
+  </div>
+  <div id="ans" style="margin-top:14px"></div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const PR = {{ demo_pr }};
@@ -178,6 +201,33 @@ $('bFix').onclick = async () => {
   }catch(e){ log('Error: '+e.message,'err'); }
   busy($('bFix'), false); refresh();
 };
+
+document.querySelectorAll('.qp').forEach(b => {
+  b.onclick = () => { $('q').value = b.textContent.trim(); $('bAsk').click(); };
+});
+
+$('bAsk').onclick = async () => {
+  const q = $('q').value.trim();
+  if(!q){ return; }
+  $('bAsk').disabled = true;
+  $('ans').innerHTML = '<span class="spin"></span> <span class="sub">retrieving and answering…</span>';
+  try{
+    const r = await (await fetch('/api/ask', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question: q})
+    })).json();
+    const cites = (r.citations||[]).slice(0,4)
+      .map(c => `<span class="tagc">${c.file}:${c.name}</span>`).join(' ');
+    $('ans').innerHTML = `
+      <div style="background:var(--panel2);border-radius:8px;padding:13px 15px">
+        ${(r.answer||'(no answer)').replace(/</g,'&lt;').replace(/\n/g,'<br>')}
+      </div>
+      <div class="sub" style="margin-top:9px">Answered from: ${cites}</div>
+      <div class="meta">${r.latency_s}s · retrieval: ${r.retriever||'n/a'}</div>`;
+  }catch(e){ $('ans').innerHTML = `<span style="color:var(--bad)">Error: ${e.message}</span>`; }
+  $('bAsk').disabled = false;
+};
+$('q').addEventListener('keydown', e => { if(e.key === 'Enter') $('bAsk').click(); });
 
 refresh(); setInterval(refresh, 4000);
 </script>
