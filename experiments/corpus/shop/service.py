@@ -56,7 +56,7 @@ def shop(customer: int = 101, amount: float = 1000.0):
 
     tier = record["tier"]
     percent = discount_percent(tier)
-    payable = amount * percent
+    payable = apply_discount(amount, tier)
     saved = amount - payable
 
     return HTMLResponse(storefront.render(
